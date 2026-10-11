@@ -1,26 +1,37 @@
-# Faithful Catalog
+# Criar3D.01
 
-Implement exactly the screenshot and nothing else
+Catálogo online de produtos impressos em 3D, com painel administrativo para gerenciar categorias, produtos, personalizações e imagens. Os dados do catálogo são carregados diretamente do Supabase.
 
-This project was built with [Lovable](https://lovable.dev).
+## Desenvolvimento local
 
-**Live app**: https://faithful-catalog.lovable.app
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/e2ee90e6-2248-4322-b45e-2f82afccc6e6).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+Requer Node.js e npm.
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+npm install
 npm run dev
+```
+
+Configure as variáveis do Supabase no arquivo `.env`:
+
+```env
+VITE_SUPABASE_URL=https://SEU_PROJETO.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sua_chave_publishable
+VITE_SUPABASE_PROJECT_ID=seu_project_id
+SUPABASE_URL=https://SEU_PROJETO.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sua_chave_publishable
+```
+
+Use somente a chave publishable no cliente. Nunca coloque chaves `service_role` ou `sb_secret` no frontend ou em arquivos versionados.
+
+## Configuração do banco
+
+Os scripts SQL estão em `supabase/`. Confira o banco existente antes de aplicar `catalog.sql`; em um projeto Supabase novo, aplique `catalog.sql` e depois `admin.sql` no SQL Editor.
+
+Acesse `/admin` para criar a primeira conta administrativa. O cadastro inicial só aparece enquanto não houver administrador. Com a confirmação de e-mail habilitada, confirme o endereço e entre para concluir a ativação.
+
+## Verificação
+
+```sh
+npx tsc --noEmit
+npm run build
 ```

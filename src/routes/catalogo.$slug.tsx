@@ -1,10 +1,10 @@
 import { createFileRoute, notFound, Link } from "@tanstack/react-router";
-import { products } from "@/features/catalog/products.mock";
+import { catalogService } from "@/features/catalog/catalogService";
 import { ProductDetails } from "@/features/catalog/ProductDetails";
 import { pageHead } from "@/features/catalog/config";
 export const Route = createFileRoute("/catalogo/$slug")({
-  loader: ({ params }) => {
-    const product = products.find((p) => p.slug === params.slug && p.isActive);
+  loader: async ({ params }) => {
+    const product = await catalogService.getProductBySlug(params.slug);
     if (!product) throw notFound();
     return product;
   },

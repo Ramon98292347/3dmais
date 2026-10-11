@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import type { CartItem, Product } from "../catalog/types";
-import { products } from "../catalog/products.mock";
+import { catalogService } from "../catalog/catalogService";
 import { addCartItem, cartTotal, clampQuantity, restoreCart } from "./cartLogic";
 interface CartContextValue {
   items: CartItem[];
@@ -21,12 +21,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [open, setOpen] = useState(false);
   useEffect(() => {
+    let cancelled = false;
     try {
-      setItems(restoreCart(localStorage.getItem(CART_STORAGE_KEY) || "[]", products));
+      const savedCart = localStorage.getItem(CART_STORAGE_KEY) || "[]";
+      void catalogService
+        .listProducts()
+        .then((currentProducts) => {
+          if (cancelled) return;
+          setItems(restoreCart(savedCart, currentProducts));
+          setReady(true);
+        })
+        .catch(() => {
+          // Keep the saved cart untouched until the catalog can validate it.
+        });
     } catch {
       // Storage may be unavailable; the cart still works in memory.
+      setReady(true);
     }
-    setReady(true);
+    return () => {
+      cancelled = true;
+    };
   }, []);
   useEffect(() => {
     if (ready)

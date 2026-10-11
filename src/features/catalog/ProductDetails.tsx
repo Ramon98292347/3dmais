@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { Product } from "./types";
 import { money } from "./catalogService";
@@ -135,6 +136,14 @@ export function ProductDetails({ product }: { product: Product }) {
       product.options.filter((o) => o.type === "select").map((o) => [o.id, o.values?.[0] || ""]),
     ),
   );
+  const addToCart = () => {
+    const missing = product.options.find((option) => option.required && !options[option.id]?.trim());
+    if (missing) {
+      toast.error(`Preencha: ${missing.label}.`);
+      return;
+    }
+    cart.add(product, quantity, options);
+  };
   return (
     <main className="container details-page">
       <Link to="/catalogo" className="back-link">
@@ -150,7 +159,6 @@ export function ProductDetails({ product }: { product: Product }) {
           <div className="details-price">
             {product.options.length > 0 && <small>A partir de</small>}
             <strong>{money(product.price)}</strong>
-            <span>Produto de demonstração</span>
           </div>
           <p>{product.description}</p>
           {product.options.length > 0 && (
@@ -189,7 +197,7 @@ export function ProductDetails({ product }: { product: Product }) {
           )}
           <div className="detail-buy">
             <QuantitySelector value={quantity} onChange={setQuantity} />
-            <Button size="lg" onClick={() => cart.add(product, quantity, options)}>
+            <Button size="lg" onClick={addToCart}>
               <ShoppingBag /> Quero comprar
             </Button>
           </div>

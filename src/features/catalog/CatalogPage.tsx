@@ -24,7 +24,6 @@ import {
 import { Button } from "@/components/ui/button";
 import hero from "@/assets/catalog-hero.jpg";
 import { catalogService, filterProducts, money } from "./catalogService";
-import { categories } from "./products.mock";
 import { Drawer, ProductPhoto } from "./controls";
 import { useCart } from "../cart/CartProvider";
 import type { Product } from "./types";
@@ -107,6 +106,9 @@ export function CatalogPage({
   const [price, setPrice] = useState("all");
   const [sort, setSort] = useState("recent");
   const [filterOpen, setFilterOpen] = useState(false);
+  const categories = [...new Set(products.map((product) => product.category))].sort((a, b) =>
+    a.localeCompare(b, "pt-BR"),
+  );
   const results = filterProducts(products, { query, category, price, sort });
   const reset = () => {
     setQuery("");
@@ -271,7 +273,7 @@ export function CatalogPage({
             <span className="section-eyebrow">CRIATIVIDADE EM CADA CAMADA</span>
             <h2>{categoryView ? "Explore nossos produtos" : "Encontre sua próxima ideia"}</h2>
           </div>
-          <span className="demo-note">Coleção de demonstração</span>
+          <span className="demo-note">Catálogo atualizado</span>
         </div>
         <div className="search-toolbar">
           <div className="search-box">

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, Menu, MessageCircle, ShoppingBag, Layers3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import logo from "@/assets/logo.png.asset.json";
+import logo from "@/assets/brand-logo.webp";
 import { useCart } from "../cart/CartProvider";
 import { Drawer } from "./controls";
 import { whatsappUrl } from "./config";
@@ -44,14 +44,8 @@ export function Header() {
       <header className="site-header">
         <div className="container header-inner">
           <Link to="/catalogo" className="brand" aria-label="Criar3D.01 — Catálogo">
-            <img src={logo.url} width={50} height={50} alt="Logo Criar3D.01" />
-            <span>
-              <strong>
-                criar<span>3D</span>
-                <small>.01</small>
-              </strong>
-              <small>UMA MARCA RF TECNOLOGIA</small>
-            </span>
+            <img src={logo} width={68} height={68} alt="Logo Criar3D.01" />
+            <span><small>UMA MARCA RF TECNOLOGIA</small></span>
           </Link>
           <nav className="desktop-nav">{navigation}</nav>
           <div className="header-actions">
@@ -109,6 +103,7 @@ export function Footer() {
             <h4>Explore</h4>
             <Link to="/catalogo">Catálogo</Link>
             <Link to="/categorias">Categorias</Link>
+            <Link to="/admin">Área administrativa</Link>
           </div>
           <div>
             <h4>Vamos conversar</h4>
@@ -128,7 +123,7 @@ export function Footer() {
         </div>
         <div className="container footer-bottom">
           <span>© 2026 Criar3D.01 + RF Tecnologia</span>
-          <span>Catálogo demonstrativo · Imagens e valores ilustrativos</span>
+          <span>Impressão 3D e produtos personalizados</span>
         </div>
       </footer>
       {url ? (
