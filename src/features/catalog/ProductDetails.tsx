@@ -1,0 +1,241 @@
+import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ShoppingBag,
+  ArrowLeft,
+  Layers3,
+  Clock,
+  Check,
+  ZoomIn,
+  X,
+} from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Button } from "@/components/ui/button";
+import type { Product } from "./types";
+import { money } from "./catalogService";
+import { QuantitySelector, ProductPhoto } from "./controls";
+import { useCart } from "../cart/CartProvider";
+export function ProductGallery({ product }: { product: Product }) {
+  const [index, setIndex] = useState(0);
+  const [zoom, setZoom] = useState(false);
+  const [start, setStart] = useState<number | null>(null);
+  const images = [...product.images].sort((a, b) => a.sortOrder - b.sortOrder).slice(0, 10);
+  const image = images[index];
+  const step = (direction: number) =>
+    setIndex((i) => (i + direction + images.length) % images.length);
+  return (
+    <div className="gallery">
+      <div
+        className="gallery-main"
+        onTouchStart={(e) => setStart(e.touches[0]?.clientX ?? null)}
+        onTouchEnd={(e) => {
+          const end = e.changedTouches[0]?.clientX;
+          if (start !== null && end !== undefined && Math.abs(start - end) > 40)
+            step(start > end ? 1 : -1);
+          setStart(null);
+        }}
+      >
+        {image ? (
+          <img
+            src={image.url}
+            alt={image.alt}
+            width={768}
+            height={768}
+            className={index === 1 ? "gallery-detail" : ""}
+          />
+        ) : (
+          <ProductPhoto product={product} />
+        )}
+        <Button
+          variant="outline"
+          size="icon"
+          className="gallery-zoom"
+          aria-label="Ampliar foto"
+          onClick={() => setZoom(true)}
+        >
+          <ZoomIn />
+        </Button>
+        {images.length > 1 && (
+          <>
+            <Button
+              variant="outline"
+              size="icon"
+              className="gallery-prev"
+              aria-label="Foto anterior"
+              onClick={() => step(-1)}
+            >
+              <ChevronLeft />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="gallery-next"
+              aria-label="Próxima foto"
+              onClick={() => step(1)}
+            >
+              <ChevronRight />
+            </Button>
+          </>
+        )}
+        <span className="gallery-count">
+          {images.length ? index + 1 : 0} / {images.length}
+        </span>
+      </div>
+      <div className="gallery-thumbs">
+        {images.map((img, i) => (
+          <Button
+            variant="outline"
+            key={img.id}
+            aria-label={`Ver foto ${i + 1}`}
+            aria-pressed={i === index}
+            className={`gallery-thumb ${i === index ? "selected" : ""}`}
+            onClick={() => setIndex(i)}
+          >
+            <img
+              src={img.url}
+              width={80}
+              height={80}
+              loading="lazy"
+              alt={img.alt}
+              className={i === 1 ? "gallery-detail" : ""}
+            />
+          </Button>
+        ))}
+      </div>
+      <Dialog.Root open={zoom} onOpenChange={setZoom}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="drawer-overlay" />
+          <Dialog.Content className="zoom-dialog">
+            <Dialog.Title className="sr-only">{product.name}</Dialog.Title>
+            <Dialog.Description className="sr-only">Imagem ampliada do produto</Dialog.Description>
+            <Dialog.Close asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="zoom-close"
+                aria-label="Fechar imagem ampliada"
+              >
+                <X />
+              </Button>
+            </Dialog.Close>
+            {image && <img src={image.url} alt={image.alt} />}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </div>
+  );
+}
+export function ProductDetails({ product }: { product: Product }) {
+  const cart = useCart();
+  const [quantity, setQuantity] = useState(1);
+  const [options, setOptions] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      product.options.filter((o) => o.type === "select").map((o) => [o.id, o.values?.[0] || ""]),
+    ),
+  );
+  return (
+    <main className="container details-page">
+      <Link to="/catalogo" className="back-link">
+        <ArrowLeft size={16} /> Voltar ao catálogo
+      </Link>
+      <div className="details-layout">
+        <ProductGallery product={product} />
+        <div className="details-info">
+          <span className="section-eyebrow">{product.category}</span>
+          {product.badge && <span className="details-badge">{product.badge}</span>}
+          <h1>{product.name}</h1>
+          <p className="details-intro">{product.shortDescription}</p>
+          <div className="details-price">
+            {product.options.length > 0 && <small>A partir de</small>}
+            <strong>{money(product.price)}</strong>
+            <span>Produto de demonstração</span>
+          </div>
+          <p>{product.description}</p>
+          {product.options.length > 0 && (
+            <fieldset className="product-options">
+              <legend>Deixe com a sua personalidade</legend>
+              {product.options.map((option) => (
+                <label className="field" key={option.id}>
+                  {option.label}
+                  {option.type === "select" ? (
+                    <select
+                      value={options[option.id] || ""}
+                      onChange={(e) => setOptions({ ...options, [option.id]: e.target.value })}
+                    >
+                      {option.values?.map((value) => (
+                        <option key={value}>{value}</option>
+                      ))}
+                    </select>
+                  ) : option.type === "textarea" ? (
+                    <textarea
+                      maxLength={500}
+                      value={options[option.id] || ""}
+                      onChange={(e) => setOptions({ ...options, [option.id]: e.target.value })}
+                      placeholder="Um detalhe especial para a sua peça"
+                    />
+                  ) : (
+                    <input
+                      maxLength={80}
+                      value={options[option.id] || ""}
+                      onChange={(e) => setOptions({ ...options, [option.id]: e.target.value })}
+                      placeholder="Digite o nome"
+                    />
+                  )}
+                </label>
+              ))}
+            </fieldset>
+          )}
+          <div className="detail-buy">
+            <QuantitySelector value={quantity} onChange={setQuantity} />
+            <Button size="lg" onClick={() => cart.add(product, quantity, options)}>
+              <ShoppingBag /> Quero comprar
+            </Button>
+          </div>
+          <div className="detail-promises">
+            <span>
+              <Layers3 /> Produzido em impressão 3D
+            </span>
+            {product.productionTime && (
+              <span>
+                <Clock />
+                {product.productionTime}
+              </span>
+            )}
+          </div>
+          <div className="specifications">
+            <h2>Detalhes que fazem a diferença</h2>
+            {product.features?.map((feature) => (
+              <p key={feature}>
+                <Check size={16} />
+                {feature}
+              </p>
+            ))}
+            <dl>
+              {product.material && (
+                <>
+                  <dt>Material</dt>
+                  <dd>{product.material}</dd>
+                </>
+              )}
+              {product.dimensions && (
+                <>
+                  <dt>Medidas</dt>
+                  <dd>{product.dimensions}</dd>
+                </>
+              )}
+              {product.productionTime && (
+                <>
+                  <dt>Produção</dt>
+                  <dd>{product.productionTime}</dd>
+                </>
+              )}
+            </dl>
+            {product.notes && <p className="detail-notes">{product.notes}</p>}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
