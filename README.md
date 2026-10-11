@@ -25,7 +25,7 @@ Use somente a chave publishable no cliente. Nunca coloque chaves `service_role` 
 
 ## Configuração do banco
 
-Os scripts SQL estão em `supabase/`. Confira o banco existente antes de aplicar `catalog.sql`; em um projeto Supabase novo, aplique `catalog.sql` e depois `admin.sql` no SQL Editor.
+Os scripts SQL estão em `supabase/`. Confira o banco existente antes de aplicar `catalog.sql`; em um projeto Supabase novo, aplique `catalog.sql`, `admin.sql` e `orders.sql`, nessa ordem, no SQL Editor. Se o catálogo e o painel já estão configurados, aplique apenas `orders.sql` para habilitar o histórico.
 
 Acesse `/admin` para criar a primeira conta administrativa. O cadastro inicial só aparece enquanto não houver administrador. Com a confirmação de e-mail habilitada, confirme o endereço e entre para concluir a ativação.
 

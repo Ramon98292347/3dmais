@@ -30,7 +30,12 @@ export function createOrderPayload(
       quantity: item.quantity,
       unitPrice: item.product.price,
       subtotal: item.quantity * item.product.price,
-      selectedOptions: item.selectedOptions,
+      selectedOptions: Object.fromEntries(
+        Object.entries(item.selectedOptions).map(([optionId, value]) => [
+          item.product.options.find((option) => option.id === optionId)?.label ?? optionId,
+          value,
+        ]),
+      ),
     })),
     notes,
     subtotal: cartTotal(items),

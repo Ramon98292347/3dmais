@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
-import { ArrowLeft, Box, ImagePlus, LogOut, Plus, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, Box, ClipboardList, ImagePlus, LogOut, Plus, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { pageHead } from "@/features/catalog/config";
+import { money } from "@/features/catalog/catalogService";
 
 export const Route = createFileRoute("/admin")({
   head: () => pageHead("Administração | Criar3D.01", "Gerencie produtos e categorias."),
@@ -42,6 +43,30 @@ type ProductRow = {
   notes: string | null;
   keywords: string[];
   created_at: string;
+};
+type OrderRow = {
+  order_id: string;
+  created_at: string;
+  customer: {
+    name: string;
+    whatsapp: string;
+    city: string;
+    state: string;
+    cep: string;
+    address: string;
+    number: string;
+    complement: string;
+  };
+  items: {
+    productId: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    subtotal: number;
+    selectedOptions: Record<string, string>;
+  }[];
+  notes: string;
+  subtotal: number | string;
 };
 type OptionDraft = {
   key: string;
@@ -121,6 +146,9 @@ function AdminPage() {
   const [signupNotice, setSignupNotice] = useState("");
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [products, setProducts] = useState<ProductRow[]>([]);
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [ordersError, setOrdersError] = useState("");
+  const [activeSection, setActiveSection] = useState<"products" | "orders">("products");
   const [draft, setDraft] = useState<ProductDraft>(emptyProduct);
   const [optionDrafts, setOptionDrafts] = useState<OptionDraft[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
@@ -184,9 +212,10 @@ function AdminPage() {
 
   async function loadDashboard() {
     setPageError("");
-    const [categoryResult, productResult] = await Promise.all([
+    const [categoryResult, productResult, orderResult] = await Promise.all([
       database.from("categories").select("*").order("sort_order").order("name"),
       database.from("products").select("*").order("created_at", { ascending: false }),
+      database.from("catalog_orders").select("*").order("created_at", { ascending: false }).limit(100),
     ]);
     if (categoryResult.error || productResult.error) {
       setPageError(categoryResult.error?.message || productResult.error?.message || "Falha ao carregar o painel.");
@@ -194,6 +223,13 @@ function AdminPage() {
     }
     setCategories(categoryResult.data as CategoryRow[]);
     setProducts(productResult.data as ProductRow[]);
+    if (orderResult.error) {
+      setOrders([]);
+      setOrdersError("Aplique supabase/orders.sql para ativar o histórico de pedidos.");
+    } else {
+      setOrders(orderResult.data as unknown as OrderRow[]);
+      setOrdersError("");
+    }
     setDraft((current) => ({
       ...current,
       categoryId: current.categoryId || (categoryResult.data as CategoryRow[])[0]?.id || "",
@@ -566,6 +602,61 @@ function AdminPage() {
         </div>
       )}
 
+      <nav className="mb-6 flex flex-wrap gap-2" aria-label="Seções administrativas">
+        <Button variant={activeSection === "products" ? "default" : "outline"} onClick={() => setActiveSection("products")}>
+          <Box size={16} /> Produtos e categorias
+        </Button>
+        <Button variant={activeSection === "orders" ? "default" : "outline"} onClick={() => setActiveSection("orders")}>
+          <ClipboardList size={16} /> Histórico de pedidos ({orders.length})
+        </Button>
+      </nav>
+
+      {activeSection === "orders" ? (
+        <section className="space-y-4">
+          <header className="rounded-2xl border bg-card p-5 shadow-sm md:p-7">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">Histórico de pedidos</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Pedidos mais recentes primeiro. O painel exibe até os últimos 100.</p>
+              </div>
+              <Button variant="outline" onClick={() => void loadDashboard()}>Atualizar</Button>
+            </div>
+          </header>
+          {ordersError && <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-800">{ordersError}</p>}
+          {!ordersError && !orders.length && <p className="rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">Nenhum pedido recebido ainda.</p>}
+          {!ordersError && orders.map((order) => (
+            <article key={order.order_id} className="rounded-2xl border bg-card p-5 shadow-sm md:p-7">
+              <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
+                <div>
+                  <h3 className="text-lg font-semibold">{order.customer.name}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">Pedido {order.order_id.slice(0, 8).toUpperCase()} · {new Date(order.created_at).toLocaleString("pt-BR")}</p>
+                </div>
+                <strong className="text-lg text-primary">{money(Number(order.subtotal))}</strong>
+              </header>
+              <div className="grid gap-5 py-4 md:grid-cols-2">
+                <div className="space-y-1 text-sm">
+                  <h4 className="font-semibold">Contato e entrega</h4>
+                  <p>WhatsApp: {order.customer.whatsapp}</p>
+                  <p>{order.customer.city} — {order.customer.state}{order.customer.cep ? ` · CEP ${order.customer.cep}` : ""}</p>
+                  {(order.customer.address || order.customer.number || order.customer.complement) && <p>{[order.customer.address, order.customer.number, order.customer.complement].filter(Boolean).join(", ")}</p>}
+                </div>
+                <div className="space-y-2 text-sm">
+                  <h4 className="font-semibold">Itens do pedido</h4>
+                  <ul className="space-y-2">
+                    {order.items.map((item, index) => (
+                      <li key={`${order.order_id}-${index}`} className="border-b pb-2 last:border-0">
+                        <div className="flex justify-between gap-3"><span>{item.quantity} × {item.name}</span><strong>{money(Number(item.subtotal))}</strong></div>
+                        {Object.entries(item.selectedOptions ?? {}).filter(([, value]) => value).map(([key, value]) => <p key={key} className="text-xs text-muted-foreground">{key}: {value}</p>)}
+                      </li>
+                    ))}
+                  </ul>
+                  {order.notes && <p className="rounded-lg bg-muted p-3 text-xs">Observação: {order.notes}</p>}
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : (
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
         <section className="rounded-2xl border bg-card p-5 shadow-sm md:p-7">
           <div className="mb-6 flex items-start justify-between gap-4">
@@ -686,6 +777,7 @@ function AdminPage() {
           </section>
         </aside>
       </div>
+      )}
     </main>
   );
 }

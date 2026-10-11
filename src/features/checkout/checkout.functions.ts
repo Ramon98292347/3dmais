@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { supabase } from "@/integrations/supabase/client";
 
 const orderPayloadSchema = z.object({
   orderId: z.string().uuid(),
@@ -10,7 +12,7 @@ const orderPayloadSchema = z.object({
     state: z.string().regex(/^[A-Z]{2}$/),
     cep: z.string().max(10),
     address: z.string().max(150),
-    number: z.string().max(50),
+    number: z.string().max(150),
     complement: z.string().max(150),
   }),
   items: z.array(z.object({
@@ -19,7 +21,7 @@ const orderPayloadSchema = z.object({
     quantity: z.number().int().min(1).max(99),
     unitPrice: z.number().finite().min(0).max(10_000_000),
     subtotal: z.number().finite().min(0).max(10_000_000),
-    selectedOptions: z.record(z.string().max(80), z.string().max(500)),
+    selectedOptions: z.record(z.string().max(120), z.string().max(500)),
   })).min(1).max(25),
   notes: z.string().max(1000),
   subtotal: z.number().finite().min(0).max(100_000_000),
@@ -27,6 +29,7 @@ const orderPayloadSchema = z.object({
 });
 
 const webhookUrl = "https://n8n-n8n.ynlng8.easypanel.host/webhook/3dmais";
+const database = supabase as unknown as SupabaseClient;
 
 export const submitOrderToWebhook = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
@@ -53,6 +56,12 @@ export const submitOrderToWebhook = createServerFn({ method: "POST" })
     return parsed.data;
   })
   .handler(async ({ data }) => {
+    const { error: recordError } = await database.rpc("record_catalog_order", { p_order: data });
+    if (recordError) {
+      console.error("Falha ao registrar o pedido no histórico.", recordError);
+      throw new Error("Não foi possível registrar o pedido. Tente novamente.");
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
     try {

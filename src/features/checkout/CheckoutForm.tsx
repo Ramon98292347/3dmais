@@ -63,6 +63,7 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
   const [lastOrderId, setLastOrderId] = useState("");
   const [orderId, setOrderId] = useState<string | null>(null);
   const change = (key: keyof CustomerData, value: string) => {
+    setOrderId(null);
     setCustomer((prev) => ({ ...prev, [key]: value }));
     setErrors((prev) => ({ ...prev, [key]: "" }));
   };
@@ -208,7 +209,10 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
                 <textarea
                   maxLength={1000}
                   value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  onChange={(e) => {
+                    setOrderId(null);
+                    setNotes(e.target.value);
+                  }}
                   placeholder="Há algo mais que precisamos saber?"
                 />
               </label>
