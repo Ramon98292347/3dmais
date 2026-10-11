@@ -79,7 +79,15 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
     try {
       const payload = createOrderPayload(customer, cart.items, notes, orderId ?? undefined);
       setOrderId(payload.orderId);
-      await sendOrder({ data: payload });
+      const result = await sendOrder({ data: payload });
+      if (!result.success) {
+        setSubmitError(
+          result.error === "history_unavailable"
+            ? "O histórico ainda não foi configurado. Execute supabase/orders.sql no SQL Editor do Supabase e tente novamente."
+            : "O pedido ficou salvo no histórico, mas não conseguimos avisar o atendimento pelo webhook. Tente novamente.",
+        );
+        return;
+      }
       setLastOrderId(payload.orderId);
       cart.clear();
       setStage("success");

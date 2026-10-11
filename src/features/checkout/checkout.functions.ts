@@ -58,8 +58,8 @@ export const submitOrderToWebhook = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { error: recordError } = await database.rpc("record_catalog_order", { p_order: data });
     if (recordError) {
-      console.error("Falha ao registrar o pedido no histórico.", recordError);
-      throw new Error("Não foi possível registrar o pedido. Tente novamente.");
+      console.error("Falha ao registrar o pedido no histórico.", recordError.code, recordError.message);
+      return { success: false, error: "history_unavailable" as const };
     }
 
     const controller = new AbortController();
@@ -77,7 +77,7 @@ export const submitOrderToWebhook = createServerFn({ method: "POST" })
       return { success: true, orderId: data.orderId };
     } catch (error) {
       console.error("Falha ao enviar pedido ao webhook do n8n.", error);
-      throw new Error("Não foi possível enviar o pedido. Tente novamente.");
+      return { success: false, error: "webhook_unavailable" as const };
     } finally {
       clearTimeout(timeout);
     }
