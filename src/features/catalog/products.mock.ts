@@ -100,7 +100,7 @@ export const products: Product[] = seeds.map(
     description: `${shortDescription} Uma peça de demonstração produzida com impressão 3D, com textura delicada e atenção a cada detalhe. Ideal para quem valoriza produtos criativos e originais.`,
     isActive: true,
     isFeatured: badge === "DESTAQUE",
-    badge: badge || undefined,
+    ...(badge ? { badge } : {}),
     material: "PLA — polímero para impressão 3D",
     dimensions: i === 0 ? "15 × 15 × 28 cm" : "Medidas ilustrativas: 12 × 12 × 15 cm",
     productionTime: "3 a 7 dias úteis (ilustrativo)",

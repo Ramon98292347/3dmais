@@ -18,6 +18,7 @@ const customer = {
   complement: "",
 };
 const product = products[0];
+if (!product) throw new Error("Expected a demo product fixture");
 describe("Catalog rules", () => {
   it("never allows quantity below one", () => {
     expect(clampQuantity(0)).toBe(1);

@@ -161,7 +161,7 @@ export function CatalogPage({
               name="price"
               value={value}
               checked={price === value}
-              onChange={() => setPrice(value)}
+              onChange={() => setPrice(value ?? "all")}
             />
             {label}
           </label>

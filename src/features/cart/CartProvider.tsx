@@ -23,14 +23,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       setItems(restoreCart(localStorage.getItem(CART_STORAGE_KEY) || "[]", products));
-    } catch {}
+    } catch {
+      // Storage may be unavailable; the cart still works in memory.
+    }
     setReady(true);
   }, []);
   useEffect(() => {
     if (ready)
       try {
         localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
-      } catch {}
+      } catch {
+        // Private browsing or quota limits must not interrupt shopping.
+      }
   }, [items, ready]);
   const add = (product: Product, quantity = 1, options: Record<string, string> = {}) => {
     setItems((prev) => addCartItem(prev, product, quantity, options));
