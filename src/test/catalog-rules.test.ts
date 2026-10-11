@@ -5,7 +5,6 @@ import { addCartItem, clampQuantity, restoreCart, cartTotal } from "../features/
 import {
   createOrderPayload,
   validateCustomer,
-  submitOrderMock,
 } from "../features/checkout/checkoutService";
 const customer = {
   name: "Maria Silva",
@@ -72,7 +71,9 @@ describe("Catalog rules", () => {
     expect(cartTotal(items)).toBeCloseTo(449.7);
   });
   it("builds the required payload without freight or payment", () => {
-    const payload = createOrderPayload(customer, addCartItem([], product, 2, {}), "Teste");
+    const orderId = "00000000-0000-4000-8000-000000000001";
+    const payload = createOrderPayload(customer, addCartItem([], product, 2, {}), "Teste", orderId);
+    expect(payload.orderId).toBe(orderId);
     expect(payload.items[0]).toEqual({
       productId: product.id,
       name: product.name,
@@ -85,10 +86,5 @@ describe("Catalog rules", () => {
     expect(payload.customer).toEqual(customer);
     expect(payload).not.toHaveProperty("shipping");
     expect(payload).not.toHaveProperty("payment");
-  });
-  it("simulates a successful order", async () => {
-    expect(
-      await submitOrderMock(createOrderPayload(customer, addCartItem([], product, 1, {}), "")),
-    ).toEqual({ success: true });
   });
 });

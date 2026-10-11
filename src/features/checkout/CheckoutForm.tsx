@@ -6,8 +6,8 @@ import {
   CircleCheck,
   LoaderCircle,
   PackageCheck,
-  ShieldCheck,
 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { useCart } from "../cart/CartProvider";
 import type { CustomerData } from "../catalog/types";
@@ -44,6 +44,7 @@ const states = [
 ];
 export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose: () => void }) {
   const cart = useCart();
+  const sendOrder = useServerFn(checkoutService.submitOrder);
   const [customer, setCustomer] = useState<CustomerData>({
     name: "",
     whatsapp: "",
@@ -59,6 +60,8 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
   const [stage, setStage] = useState<"form" | "review" | "success">("form");
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [lastOrderId, setLastOrderId] = useState("");
+  const [orderId, setOrderId] = useState<string | null>(null);
   const change = (key: keyof CustomerData, value: string) => {
     setCustomer((prev) => ({ ...prev, [key]: value }));
     setErrors((prev) => ({ ...prev, [key]: "" }));
@@ -73,11 +76,14 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
     setBusy(true);
     setSubmitError("");
     try {
-      await checkoutService.submitOrder(createOrderPayload(customer, cart.items, notes));
+      const payload = createOrderPayload(customer, cart.items, notes, orderId ?? undefined);
+      setOrderId(payload.orderId);
+      await sendOrder({ data: payload });
+      setLastOrderId(payload.orderId);
       cart.clear();
       setStage("success");
     } catch {
-      setSubmitError("Não foi possível preparar o pedido. Tente novamente.");
+      setSubmitError("Não foi possível enviar o pedido. Confira sua conexão e tente novamente.");
     } finally {
       setBusy(false);
     }
@@ -95,15 +101,10 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
           um passo mais perto.
         </h2>
         <p>
-          Seu pedido foi preparado para envio. Em breve esta etapa será integrada ao atendimento da
-          empresa.
+          Seu pedido foi enviado para atendimento. A loja poderá entrar em contato pelo WhatsApp
+          informado.
         </p>
-        <div className="simulation-note">
-          <ShieldCheck />
-          <span>
-            Esta é uma simulação. Nenhum pedido foi enviado e nenhum pagamento foi realizado.
-          </span>
-        </div>
+        <p className="text-xs text-muted-foreground">Código do pedido: {lastOrderId}</p>
         <Button size="lg" onClick={onClose}>
           Continuar explorando <ArrowRight />
         </Button>
@@ -277,16 +278,19 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
             {busy ? (
               <>
                 <LoaderCircle className="animate-spin" />
-                Preparando pedido...
+                Enviando pedido...
               </>
             ) : (
               <>
-                Finalizar pedido simulado <ArrowRight />
+                Enviar pedido <ArrowRight />
               </>
             )}
           </Button>
         )}
-        <p className="checkout-disclaimer">Sem pagamento nesta etapa. Finalização simulada.</p>
+        <p className="checkout-disclaimer">
+          Sem pagamento nesta etapa. Ao finalizar, seus dados serão enviados à loja para atendimento
+          do pedido.
+        </p>
       </div>
     </>
   );

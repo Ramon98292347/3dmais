@@ -52,6 +52,7 @@ export interface CustomerData {
   complement: string;
 }
 export interface OrderPayload {
+  orderId: string;
   customer: CustomerData;
   items: {
     productId: string;

@@ -1,5 +1,6 @@
 import type { CartItem, CustomerData, OrderPayload } from "../catalog/types";
 import { cartTotal } from "../cart/cartLogic";
+import { submitOrderToWebhook } from "./checkout.functions";
 export function validateCustomer(customer: CustomerData): Record<string, string> {
   const errors: Record<string, string> = {};
   if (customer.name.trim().split(/\s+/).length < 2) errors["name"] = "Informe seu nome completo.";
@@ -18,8 +19,10 @@ export function createOrderPayload(
   customer: CustomerData,
   items: CartItem[],
   notes: string,
+  orderId: string = crypto.randomUUID(),
 ): OrderPayload {
   return {
+    orderId,
     customer,
     items: items.map((item) => ({
       productId: item.product.id,
@@ -35,12 +38,6 @@ export function createOrderPayload(
   };
 }
 export interface CheckoutSource {
-  submitOrder: (payload: OrderPayload) => Promise<{ success: boolean }>;
+  submitOrder: typeof submitOrderToWebhook;
 }
-export const submitOrderMock = async (payload: OrderPayload) => {
-  if (!payload.items.length || Object.keys(validateCustomer(payload.customer)).length)
-    throw new Error("Confira os dados do pedido.");
-  await new Promise((resolve) => setTimeout(resolve, 850));
-  return { success: true };
-};
-export const checkoutService: CheckoutSource = { submitOrder: submitOrderMock };
+export const checkoutService: CheckoutSource = { submitOrder: submitOrderToWebhook };
