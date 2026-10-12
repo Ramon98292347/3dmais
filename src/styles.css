@@ -1166,6 +1166,11 @@ img {
   font-size: 11px;
   line-height: 1.5;
 }
+.field-hint {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.5;
+}
 .shipping-note {
   display: flex;
   gap: 10px;

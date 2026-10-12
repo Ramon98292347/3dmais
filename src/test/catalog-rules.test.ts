@@ -1,11 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { products } from "../features/catalog/products.mock";
 import { filterProducts } from "../features/catalog/catalogService";
 import { addCartItem, clampQuantity, restoreCart, cartTotal } from "../features/cart/cartLogic";
 import {
   createOrderPayload,
+  lookupPostalCode,
   validateCustomer,
 } from "../features/checkout/checkoutService";
+import {
+  normalizePhone,
+  readCustomerProfile,
+  saveCustomerProfile,
+} from "../features/checkout/customerProfile";
 const customer = {
   name: "Maria Silva",
   whatsapp: "11999999999",
@@ -19,6 +25,47 @@ const customer = {
 const product = products[0];
 if (!product) throw new Error("Expected a demo product fixture");
 describe("Catalog rules", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("looks up and maps a Brazilian postal code", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ logradouro: "Praça da Sé", localidade: "São Paulo", uf: "SP" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(lookupPostalCode("01001-000")).resolves.toEqual({
+      address: "Praça da Sé",
+      city: "São Paulo",
+      state: "SP",
+    });
+    expect(fetchMock).toHaveBeenCalledWith("https://viacep.com.br/ws/01001000/json/", {
+      signal: undefined,
+    });
+  });
+
+  it("rejects invalid postal code lengths without making a request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(lookupPostalCode("1234")).rejects.toThrow("invalid_cep");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("saves a customer profile by phone and retrieves it with formatted input", () => {
+    const entries = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => entries.get(key) ?? null,
+      setItem: (key: string, value: string) => entries.set(key, value),
+    } as Storage;
+    const savedCustomer = { ...customer, whatsapp: "27 99829-2347", city: "Vila Velha" };
+
+    expect(normalizePhone(savedCustomer.whatsapp)).toBe("27998292347");
+    expect(saveCustomerProfile(savedCustomer, storage)).toBe(true);
+    expect(readCustomerProfile("(27) 99829-2347", storage)).toEqual(savedCustomer);
+    expect(readCustomerProfile("27998292348", storage)).toBeNull();
+  });
+
   it("never allows quantity below one", () => {
     expect(clampQuantity(0)).toBe(1);
     expect(clampQuantity(-5)).toBe(1);

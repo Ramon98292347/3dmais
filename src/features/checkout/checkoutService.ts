@@ -1,6 +1,31 @@
 import type { CartItem, CustomerData, OrderPayload } from "../catalog/types";
 import { cartTotal } from "../cart/cartLogic";
 import { submitOrderToWebhook } from "./checkout.functions";
+
+export interface PostalAddress {
+  address: string;
+  city: string;
+  state: string;
+}
+
+export async function lookupPostalCode(cep: string, signal?: AbortSignal): Promise<PostalAddress> {
+  const digits = cep.replace(/\D/g, "");
+  if (digits.length !== 8) throw new Error("invalid_cep");
+
+  const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`, { signal });
+  if (!response.ok) throw new Error("postal_lookup_failed");
+
+  const data = (await response.json()) as {
+    erro?: boolean;
+    logradouro?: string;
+    localidade?: string;
+    uf?: string;
+  };
+  if (data.erro || !data.localidade || !data.uf) throw new Error("postal_code_not_found");
+
+  return { address: data.logradouro ?? "", city: data.localidade, state: data.uf };
+}
+
 export function validateCustomer(customer: CustomerData): Record<string, string> {
   const errors: Record<string, string> = {};
   if (customer.name.trim().split(/\s+/).length < 2) errors["name"] = "Informe seu nome completo.";

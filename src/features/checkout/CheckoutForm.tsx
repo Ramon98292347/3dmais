@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -12,7 +12,13 @@ import { Button } from "@/components/ui/button";
 import { useCart } from "../cart/CartProvider";
 import type { CustomerData } from "../catalog/types";
 import { money } from "../catalog/catalogService";
-import { createOrderPayload, checkoutService, validateCustomer } from "./checkoutService";
+import {
+  createOrderPayload,
+  checkoutService,
+  lookupPostalCode,
+  validateCustomer,
+} from "./checkoutService";
+import { readCustomerProfile, saveCustomerProfile } from "./customerProfile";
 const states = [
   "AC",
   "AL",
@@ -62,9 +68,71 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
   const [submitError, setSubmitError] = useState("");
   const [lastOrderId, setLastOrderId] = useState("");
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [postalLookup, setPostalLookup] = useState<
+    "idle" | "loading" | "success" | "not-found" | "failed"
+  >("idle");
+  const [profileFound, setProfileFound] = useState(false);
+  useEffect(() => {
+    const digits = customer.whatsapp.replace(/\D/g, "");
+    setProfileFound(false);
+    if (digits.length < 10 || digits.length > 13) return;
+
+    const timeout = window.setTimeout(() => {
+      let profile;
+      try {
+        profile = readCustomerProfile(digits, window.localStorage);
+      } catch {
+        return;
+      }
+      if (!profile) return;
+      setCustomer((current) => ({ ...profile, whatsapp: current.whatsapp }));
+      setErrors((current) => ({ ...current, name: "", city: "", state: "", cep: "" }));
+      setProfileFound(true);
+    }, 350);
+
+    return () => window.clearTimeout(timeout);
+  }, [customer.whatsapp]);
+  useEffect(() => {
+    const digits = customer.cep.replace(/\D/g, "");
+    if (digits.length !== 8) {
+      setPostalLookup("idle");
+      return;
+    }
+
+    const controller = new AbortController();
+    setPostalLookup("loading");
+    lookupPostalCode(digits, controller.signal)
+      .then((address) => {
+        setCustomer((current) => ({
+          ...current,
+          address: address.address || current.address,
+          city: address.city,
+          state: address.state,
+        }));
+        setErrors((current) => ({ ...current, city: "", state: "" }));
+        setPostalLookup("success");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setPostalLookup(
+          error instanceof Error && error.message === "postal_code_not_found"
+            ? "not-found"
+            : "failed",
+        );
+      });
+
+    return () => controller.abort();
+  }, [customer.cep]);
   const change = (key: keyof CustomerData, value: string) => {
     setOrderId(null);
-    setCustomer((prev) => ({ ...prev, [key]: value }));
+    const normalizedValue =
+      key === "cep"
+        ? value
+            .replace(/\D/g, "")
+            .slice(0, 8)
+            .replace(/^(\d{5})(\d)/, "$1-$2")
+        : value;
+    setCustomer((prev) => ({ ...prev, [key]: normalizedValue }));
     setErrors((prev) => ({ ...prev, [key]: "" }));
   };
   const review = (e: FormEvent) => {
@@ -87,6 +155,11 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
             : "O pedido ficou salvo no histórico, mas não conseguimos avisar o atendimento pelo webhook. Tente novamente.",
         );
         return;
+      }
+      try {
+        saveCustomerProfile(customer, window.localStorage);
+      } catch {
+        // The order can still complete when browser storage is unavailable.
       }
       setLastOrderId(payload.orderId);
       cart.clear();
@@ -146,8 +219,8 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
             <div className="form-grid">
               {(
                 [
-                  ["name", "Nome completo", true],
                   ["whatsapp", "WhatsApp", true],
+                  ["name", "Nome completo", true],
                   ["city", "Cidade", true],
                   ["state", "Estado", true],
                   ["cep", "CEP", false],
@@ -208,6 +281,23 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
                   {errors[key] && (
                     <span className="field-error" id={`${key}-error`} role="alert">
                       {errors[key]}
+                    </span>
+                  )}
+                  {key === "cep" && postalLookup !== "idle" && (
+                    <span className="field-hint" role="status" aria-live="polite">
+                      {postalLookup === "loading" && "Buscando endereço..."}
+                      {postalLookup === "success" &&
+                        "Endereço preenchido pelo CEP. Confira os dados."}
+                      {postalLookup === "not-found" &&
+                        "CEP não encontrado. Confira ou preencha o endereço manualmente."}
+                      {postalLookup === "failed" &&
+                        "Não foi possível buscar o CEP. Preencha o endereço manualmente."}
+                    </span>
+                  )}
+                  {key === "whatsapp" && profileFound && (
+                    <span className="field-hint" role="status">
+                      Encontramos seus dados neste aparelho e preenchemos o formulário. Confira
+                      antes de continuar.
                     </span>
                   )}
                 </label>
