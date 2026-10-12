@@ -53,6 +53,7 @@ export interface CustomerData {
 }
 export interface OrderPayload {
   orderId: string;
+  paymentMethod: "bank_deposit" | "contact";
   customer: CustomerData;
   items: {
     productId: string;

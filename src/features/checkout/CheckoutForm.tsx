@@ -56,6 +56,7 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
     complement: "",
   });
   const [notes, setNotes] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"bank_deposit" | "contact">("contact");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [stage, setStage] = useState<"form" | "review" | "success">("form");
   const [busy, setBusy] = useState(false);
@@ -77,7 +78,7 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
     setBusy(true);
     setSubmitError("");
     try {
-      const payload = createOrderPayload(customer, cart.items, notes, orderId ?? undefined);
+      const payload = createOrderPayload(customer, cart.items, notes, orderId ?? undefined, paymentMethod);
       setOrderId(payload.orderId);
       const result = await sendOrder({ data: payload });
       if (!result.success) {
@@ -263,6 +264,18 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
                 </div>
               ))}
             </div>
+            <fieldset className="payment-choice">
+              <legend>Como prefere combinar o pagamento?</legend>
+              <label>
+                <input type="radio" name="payment-method" value="contact" checked={paymentMethod === "contact"} onChange={() => setPaymentMethod("contact")} />
+                Quero combinar com a loja pelo WhatsApp
+              </label>
+              <label>
+                <input type="radio" name="payment-method" value="bank_deposit" checked={paymentMethod === "bank_deposit"} onChange={() => setPaymentMethod("bank_deposit")} />
+                Tenho interesse em depósito ou transferência bancária
+              </label>
+              {paymentMethod === "bank_deposit" && <p>O atendimento confirma o total e envia os dados bancários pelo WhatsApp. Não faça depósito antes dessa confirmação.</p>}
+            </fieldset>
             {notes && <p className="order-notes">Observação: {notes}</p>}
           </>
         )}

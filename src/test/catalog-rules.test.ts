@@ -70,10 +70,11 @@ describe("Catalog rules", () => {
     expect(items.length).toBe(2);
     expect(cartTotal(items)).toBeCloseTo(449.7);
   });
-  it("builds the required payload without freight or payment", () => {
+  it("includes a payment preference without charging the customer", () => {
     const orderId = "00000000-0000-4000-8000-000000000001";
     const payload = createOrderPayload(customer, addCartItem([], product, 2, {}), "Teste", orderId);
     expect(payload.orderId).toBe(orderId);
+    expect(payload.paymentMethod).toBe("contact");
     expect(payload.items[0]).toEqual({
       productId: product.id,
       name: product.name,
@@ -86,5 +87,9 @@ describe("Catalog rules", () => {
     expect(payload.customer).toEqual(customer);
     expect(payload).not.toHaveProperty("shipping");
     expect(payload).not.toHaveProperty("payment");
+  });
+  it("stores a bank deposit preference in the order", () => {
+    const payload = createOrderPayload(customer, addCartItem([], product, 1, {}), "", undefined, "bank_deposit");
+    expect(payload.paymentMethod).toBe("bank_deposit");
   });
 });

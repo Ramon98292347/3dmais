@@ -47,6 +47,8 @@ type ProductRow = {
 type OrderRow = {
   order_id: string;
   created_at: string;
+  status: "received" | "processing" | "ready" | "completed" | "cancelled";
+  payment_method: "bank_deposit" | "contact";
   customer: {
     name: string;
     whatsapp: string;
@@ -83,6 +85,7 @@ type ProductDraft = {
   description: string;
   price: string;
   compareAtPrice: string;
+  promotionActive: boolean;
   badge: string;
   material: string;
   dimensions: string;
@@ -102,6 +105,7 @@ const emptyProduct: ProductDraft = {
   description: "",
   price: "",
   compareAtPrice: "",
+  promotionActive: false,
   badge: "",
   material: "",
   dimensions: "",
@@ -128,6 +132,13 @@ function splitList(value: string) {
     .split(/[\n,]/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function customerWhatsAppUrl(phone: string, customerName: string, orderId: string) {
+  const digits = phone.replace(/\D/g, "");
+  const internationalPhone = digits.length <= 11 ? `55${digits}` : digits;
+  const message = `Olá, ${customerName}! Sobre seu pedido ${orderId.slice(0, 8).toUpperCase()} da Criar3D.01:`;
+  return `https://wa.me/${internationalPhone}?text=${encodeURIComponent(message)}`;
 }
 
 function AdminPage() {
@@ -300,6 +311,16 @@ function AdminPage() {
     setCategories([]);
   }
 
+  async function updateOrderStatus(orderId: string, status: OrderRow["status"]) {
+    setPageError("");
+    const { error } = await database.from("catalog_orders").update({ status }).eq("order_id", orderId);
+    if (error) {
+      setPageError("Não foi possível atualizar o pedido. Aplique a versão atual de supabase/orders.sql.");
+      return;
+    }
+    setOrders((current) => current.map((order) => order.order_id === orderId ? { ...order, status } : order));
+  }
+
   async function addCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = categoryName.trim();
@@ -334,6 +355,7 @@ function AdminPage() {
       description: product.description,
       price: String(product.price),
       compareAtPrice: product.compare_at_price == null ? "" : String(product.compare_at_price),
+      promotionActive: Number(product.compare_at_price) > Number(product.price),
       badge: product.badge ?? "",
       material: product.material ?? "",
       dimensions: product.dimensions ?? "",
@@ -391,6 +413,11 @@ function AdminPage() {
       setBusy(false);
       return;
     }
+    if (draft.promotionActive && (!draft.compareAtPrice || Number(draft.compareAtPrice) <= Number(draft.price))) {
+      setPageError("Para ativar a promoção, informe um preço anterior maior que o preço atual.");
+      setBusy(false);
+      return;
+    }
     const currentImageCount = editingId
       ? await database
           .from("product_images")
@@ -415,7 +442,7 @@ function AdminPage() {
       short_description: draft.shortDescription.trim(),
       description: draft.description.trim(),
       price: Number(draft.price),
-      compare_at_price: draft.compareAtPrice ? Number(draft.compareAtPrice) : null,
+      compare_at_price: draft.promotionActive && draft.compareAtPrice ? Number(draft.compareAtPrice) : null,
       is_active: draft.active,
       is_featured: draft.featured,
       badge: draft.badge.trim() || null,
@@ -631,14 +658,27 @@ function AdminPage() {
                   <h3 className="text-lg font-semibold">{order.customer.name}</h3>
                   <p className="mt-1 text-sm text-muted-foreground">Pedido {order.order_id.slice(0, 8).toUpperCase()} · {new Date(order.created_at).toLocaleString("pt-BR")}</p>
                 </div>
-                <strong className="text-lg text-primary">{money(Number(order.subtotal))}</strong>
+                <div className="flex flex-wrap items-center gap-3">
+                  <strong className="text-lg text-primary">{money(Number(order.subtotal))}</strong>
+                  <select aria-label={`Status do pedido ${order.order_id.slice(0, 8)}`} className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={order.status ?? "received"} onChange={(event) => void updateOrderStatus(order.order_id, event.target.value as OrderRow["status"])}>
+                    <option value="received">Recebido</option>
+                    <option value="processing">Em produção</option>
+                    <option value="ready">Pronto</option>
+                    <option value="completed">Concluído</option>
+                    <option value="cancelled">Cancelado</option>
+                  </select>
+                </div>
               </header>
               <div className="grid gap-5 py-4 md:grid-cols-2">
                 <div className="space-y-1 text-sm">
                   <h4 className="font-semibold">Contato e entrega</h4>
+                  <p>Pagamento: {order.payment_method === "bank_deposit" ? "Depósito/transferência bancária (confirmar com cliente)" : "Combinar com a loja"}</p>
                   <p>WhatsApp: {order.customer.whatsapp}</p>
                   <p>{order.customer.city} — {order.customer.state}{order.customer.cep ? ` · CEP ${order.customer.cep}` : ""}</p>
                   {(order.customer.address || order.customer.number || order.customer.complement) && <p>{[order.customer.address, order.customer.number, order.customer.complement].filter(Boolean).join(", ")}</p>}
+                  <Button className="mt-2" size="sm" variant="outline" asChild>
+                    <a href={customerWhatsAppUrl(order.customer.whatsapp, order.customer.name, order.order_id)} target="_blank" rel="noreferrer">Chamar cliente no WhatsApp</a>
+                  </Button>
                 </div>
                 <div className="space-y-2 text-sm">
                   <h4 className="font-semibold">Itens do pedido</h4>
@@ -702,10 +742,17 @@ function AdminPage() {
               <label className="space-y-2 text-sm font-medium">Preço (R$) *
                 <Input type="number" min="0" step="0.01" required value={draft.price} onChange={(event) => setDraft({ ...draft, price: event.target.value })} />
               </label>
-              <label className="space-y-2 text-sm font-medium">Preço anterior / de (R$)
-                <Input type="number" min={draft.price || "0"} step="0.01" value={draft.compareAtPrice} onChange={(event) => setDraft({ ...draft, compareAtPrice: event.target.value })} />
-                <span className="block text-xs font-normal text-muted-foreground">Preencha um valor acima do preço atual para exibir o produto como promoção no carrossel.</span>
-              </label>
+              <div className="space-y-2 rounded-lg border p-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input type="checkbox" checked={draft.promotionActive} onChange={(event) => setDraft({ ...draft, promotionActive: event.target.checked })} />
+                  Ativar promoção e exibir no carrossel
+                </label>
+                {draft.promotionActive && <label className="block space-y-2 text-sm font-medium">Preço anterior / de (R$)
+                  <Input type="number" min={String(Number(draft.price || 0) + 0.01)} step="0.01" required value={draft.compareAtPrice} onChange={(event) => setDraft({ ...draft, compareAtPrice: event.target.value })} />
+                  <span className="block text-xs font-normal text-muted-foreground">Esse preço deve ser maior que o preço atual.</span>
+                </label>}
+                {!draft.promotionActive && <p className="text-xs text-muted-foreground">Desative para encerrar a promoção e remover o preço anterior.</p>}
+              </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <label className="space-y-2 text-sm font-medium">Material

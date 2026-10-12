@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const orderPayloadSchema = z.object({
   orderId: z.string().uuid(),
+  paymentMethod: z.enum(["bank_deposit", "contact"]),
   customer: z.object({
     name: z.string().trim().min(1).max(150),
     whatsapp: z.string().trim().min(1).max(20),

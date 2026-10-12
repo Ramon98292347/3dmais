@@ -20,9 +20,11 @@ export function createOrderPayload(
   items: CartItem[],
   notes: string,
   orderId: string = crypto.randomUUID(),
+  paymentMethod: OrderPayload["paymentMethod"] = "contact",
 ): OrderPayload {
   return {
     orderId,
+    paymentMethod,
     customer,
     items: items.map((item) => ({
       productId: item.product.id,

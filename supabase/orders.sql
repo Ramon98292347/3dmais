@@ -9,8 +9,46 @@ create table if not exists public.catalog_orders (
   customer jsonb not null,
   items jsonb not null,
   notes text not null default '',
-  subtotal numeric(12, 2) not null check (subtotal >= 0)
+  subtotal numeric(12, 2) not null check (subtotal >= 0),
+  status text not null default 'received'
+    check (status in ('received', 'processing', 'ready', 'completed', 'cancelled')),
+  payment_method text not null default 'contact'
+    check (payment_method in ('bank_deposit', 'contact'))
 );
+
+-- Também atualiza instalações anteriores sem substituir pedidos existentes.
+alter table public.catalog_orders
+  add column if not exists status text not null default 'received';
+alter table public.catalog_orders
+  add column if not exists payment_method text not null default 'contact';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.catalog_orders'::regclass
+      and conname = 'catalog_orders_status_check'
+  ) then
+    alter table public.catalog_orders
+      add constraint catalog_orders_status_check
+      check (status in ('received', 'processing', 'ready', 'completed', 'cancelled'));
+  end if;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.catalog_orders'::regclass
+      and conname = 'catalog_orders_payment_method_check'
+  ) then
+    alter table public.catalog_orders
+      add constraint catalog_orders_payment_method_check
+      check (payment_method in ('bank_deposit', 'contact'));
+  end if;
+end;
+$$;
 
 create index if not exists catalog_orders_created_at_idx
   on public.catalog_orders (created_at desc);
@@ -18,10 +56,17 @@ create index if not exists catalog_orders_created_at_idx
 alter table public.catalog_orders enable row level security;
 revoke all on table public.catalog_orders from public, anon, authenticated;
 grant select on table public.catalog_orders to authenticated;
+grant update (status) on table public.catalog_orders to authenticated;
 
 drop policy if exists catalog_orders_admin_read on public.catalog_orders;
 create policy catalog_orders_admin_read on public.catalog_orders
   for select to authenticated using ((select public.is_catalog_admin()));
+
+drop policy if exists catalog_orders_admin_update on public.catalog_orders;
+create policy catalog_orders_admin_update on public.catalog_orders
+  for update to authenticated
+  using ((select public.is_catalog_admin()))
+  with check ((select public.is_catalog_admin()));
 
 create or replace function public.record_catalog_order(p_order jsonb)
 returns uuid
@@ -35,6 +80,7 @@ declare
   order_customer jsonb;
   order_items jsonb;
   order_notes text;
+  order_payment_method text;
   order_subtotal numeric(12, 2);
   item jsonb;
   item_quantity integer;
@@ -53,6 +99,7 @@ begin
     order_customer := p_order -> 'customer';
     order_items := p_order -> 'items';
     order_notes := coalesce(p_order ->> 'notes', '');
+    order_payment_method := coalesce(p_order ->> 'paymentMethod', 'contact');
     order_subtotal := (p_order ->> 'subtotal')::numeric(12, 2);
   exception when others then
     raise exception 'Invalid order fields';
@@ -69,6 +116,7 @@ begin
      or length(btrim(coalesce(order_customer ->> 'city', ''))) not between 1 and 150
      or coalesce(order_customer ->> 'state', '') !~ '^[A-Z]{2}$'
      or length(coalesce(order_notes, '')) > 1000
+     or order_payment_method not in ('bank_deposit', 'contact')
      or order_subtotal < 0
      or jsonb_array_length(order_items) not between 1 and 25 then
     raise exception 'Invalid order details';
@@ -103,8 +151,8 @@ begin
     raise exception 'Invalid order subtotal';
   end if;
 
-  insert into public.catalog_orders (order_id, customer, items, notes, subtotal)
-  values (current_order_id, order_customer, order_items, order_notes, order_subtotal)
+  insert into public.catalog_orders (order_id, customer, items, notes, subtotal, payment_method)
+  values (current_order_id, order_customer, order_items, order_notes, order_subtotal, order_payment_method)
   on conflict (order_id) do nothing;
 
   return current_order_id;
