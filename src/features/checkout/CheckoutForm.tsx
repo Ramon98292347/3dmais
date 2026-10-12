@@ -221,9 +221,9 @@ export function CheckoutForm({ onBack, onClose }: { onBack: () => void; onClose:
                 [
                   ["whatsapp", "WhatsApp", true],
                   ["name", "Nome completo", true],
+                  ["cep", "CEP", false],
                   ["city", "Cidade", true],
                   ["state", "Estado", true],
-                  ["cep", "CEP", false],
                   ["address", "Endereço", false],
                   ["number", "Número", false],
                   ["complement", "Complemento", false],
