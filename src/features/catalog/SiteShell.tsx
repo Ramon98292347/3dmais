@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRight, Menu, MessageCircle, ShoppingBag, Layers3 } from "lucide-react";
+import { ArrowUpRight, Menu, MessageCircle, ShoppingBag, Layers3, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import logo from "@/assets/brand-logo.webp";
 import { useCart } from "../cart/CartProvider";
 import { Drawer } from "./controls";
-import { whatsappUrl } from "./config";
+import { companyConfig, whatsappUrl } from "./config";
 export function Header() {
   const cart = useCart();
   const [menu, setMenu] = useState(false);
@@ -111,6 +111,9 @@ export function Footer() {
             <Link to="/contato">
               Contato <ArrowUpRight size={12} />
             </Link>
+            <a href={companyConfig.mapsUrl} target="_blank" rel="noreferrer">
+              <MapPin size={13} /> Ver endereço
+            </a>
           </div>
           <div className="footer-detail">
             <span>FEITO CAMADA POR CAMADA.</span>

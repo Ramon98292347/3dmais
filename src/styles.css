@@ -1466,11 +1466,11 @@ img {
 }
 .contact-options {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 50px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 30px;
   padding-top: 25px;
   border-top: 1px solid var(--border);
-  max-width: 850px;
+  max-width: 1000px;
   margin-top: 45px;
 }
 .contact-options > div > svg {

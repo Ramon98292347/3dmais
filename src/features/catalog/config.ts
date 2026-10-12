@@ -3,6 +3,8 @@ export const companyConfig = {
   partner: "RF Tecnologia",
   whatsapp: "",
   whatsappMessage: "Olá! Gostaria de saber mais sobre os produtos da Criar3D.01.",
+  address: "Rua Presidente Costa e Silva, Castelo Branco, Cariacica - ES, 29140-822",
+  mapsUrl: "https://maps.app.goo.gl/tpf6b2PgahMMQ8Rj6",
 };
 export const whatsappUrl = () =>
   companyConfig.whatsapp

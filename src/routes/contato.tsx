@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MessageCircle, ArrowRight, ShoppingBag } from "lucide-react";
+import { MessageCircle, ArrowRight, ShoppingBag, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { pageHead, whatsappUrl } from "@/features/catalog/config";
+import { companyConfig, pageHead, whatsappUrl } from "@/features/catalog/config";
 export const Route = createFileRoute("/contato")({
   head: () =>
     pageHead(
@@ -47,6 +47,16 @@ function ContactPage() {
             <Link to="/catalogo">
               Explorar catálogo <ArrowRight />
             </Link>
+          </Button>
+        </div>
+        <div>
+          <MapPin />
+          <h2>Nosso endereço</h2>
+          <p>{companyConfig.address}</p>
+          <Button variant="outline" asChild>
+            <a href={companyConfig.mapsUrl} target="_blank" rel="noreferrer">
+              Abrir no Google Maps <ArrowRight />
+            </a>
           </Button>
         </div>
       </div>
