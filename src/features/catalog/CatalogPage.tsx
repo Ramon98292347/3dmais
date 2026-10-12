@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -20,6 +20,9 @@ import {
   Heart,
   GraduationCap,
   Palette,
+  ChevronLeft,
+  ChevronRight as ChevronRightIcon,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import hero from "@/assets/catalog-hero.jpg";
@@ -89,6 +92,77 @@ export function ProductCard({ product }: { product: Product }) {
     </article>
   );
 }
+
+function HighlightsCarousel({ products }: { products: Product[] }) {
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const highlights = products
+    .filter(
+      (product) =>
+        (product.compareAtPrice ?? 0) > product.price ||
+        ["novo", "lançamento", "lancamento"].includes((product.badge ?? "").trim().toLocaleLowerCase("pt-BR")),
+    )
+    .sort((a, b) => {
+      const aSale = (a.compareAtPrice ?? 0) > a.price;
+      const bSale = (b.compareAtPrice ?? 0) > b.price;
+      return Number(bSale) - Number(aSale) || b.createdAt.localeCompare(a.createdAt);
+    });
+
+  if (!highlights.length) return null;
+
+  const scroll = (direction: -1 | 1) => {
+    const carousel = carouselRef.current;
+    if (carousel) carousel.scrollBy({ left: direction * carousel.clientWidth * 0.8, behavior: "smooth" });
+  };
+
+  return (
+    <section className="container highlights-section" aria-label="Promoções e lançamentos">
+      <div className="highlights-heading">
+        <div>
+          <span className="section-eyebrow">NOVIDADES DA LOJA</span>
+          <h2>Promoções e lançamentos</h2>
+        </div>
+        <div className="highlights-controls">
+          <Button variant="outline" size="icon" aria-label="Produtos anteriores" onClick={() => scroll(-1)}>
+            <ChevronLeft />
+          </Button>
+          <Button variant="outline" size="icon" aria-label="Próximos produtos" onClick={() => scroll(1)}>
+            <ChevronRightIcon />
+          </Button>
+        </div>
+      </div>
+      <div className="highlights-track" ref={carouselRef}>
+        {highlights.map((product) => {
+          const onSale = (product.compareAtPrice ?? 0) > product.price;
+          return (
+            <article className="highlight-card" key={product.id}>
+              <Link to="/catalogo/$slug" params={{ slug: product.slug }} className="highlight-photo">
+                <ProductPhoto product={product} />
+                <span className={`highlight-label ${onSale ? "highlight-sale" : ""}`}>
+                  {onSale ? <Tag size={13} /> : <Sparkles size={13} />}
+                  {onSale ? "PROMOÇÃO" : "LANÇAMENTO"}
+                </span>
+              </Link>
+              <div className="highlight-info">
+                <Link to="/catalogo/$slug" params={{ slug: product.slug }} className="product-name">
+                  {product.name}
+                </Link>
+                <p>{product.shortDescription}</p>
+                <div className="highlight-price">
+                  <strong>{money(product.price)}</strong>
+                  {onSale && <del>{money(product.compareAtPrice!)}</del>}
+                </div>
+                <Button asChild size="sm">
+                  <Link to="/catalogo/$slug" params={{ slug: product.slug }}>Ver produto <ArrowRight /></Link>
+                </Button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function CatalogPage({
   initialCategory = "Todos",
   categoryView = false,
@@ -248,6 +322,7 @@ export function CatalogPage({
               </span>
             </div>
           </div>
+          <HighlightsCarousel products={products} />
         </>
       ) : (
         <section className="container category-page-heading">

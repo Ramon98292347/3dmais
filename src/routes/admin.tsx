@@ -683,8 +683,13 @@ function AdminPage() {
               <label className="space-y-2 text-sm font-medium">Slug da página
                 <Input value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: slugify(event.target.value) })} />
               </label>
-              <label className="space-y-2 text-sm font-medium">Selo opcional
-                <Input placeholder="NOVO, DESTAQUE…" value={draft.badge} onChange={(event) => setDraft({ ...draft, badge: event.target.value })} />
+              <label className="space-y-2 text-sm font-medium">Selo para lançamento
+                <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={draft.badge} onChange={(event) => setDraft({ ...draft, badge: event.target.value })}>
+                  <option value="">Sem selo</option>
+                  <option value="NOVO">NOVO</option>
+                  <option value="LANÇAMENTO">LANÇAMENTO</option>
+                  {draft.badge && !["NOVO", "LANÇAMENTO"].includes(draft.badge.toLocaleUpperCase("pt-BR")) && <option value={draft.badge}>{draft.badge} (selo atual)</option>}
+                </select>
               </label>
             </div>
             <label className="block space-y-2 text-sm font-medium">Descrição curta *
@@ -697,8 +702,9 @@ function AdminPage() {
               <label className="space-y-2 text-sm font-medium">Preço (R$) *
                 <Input type="number" min="0" step="0.01" required value={draft.price} onChange={(event) => setDraft({ ...draft, price: event.target.value })} />
               </label>
-              <label className="space-y-2 text-sm font-medium">Preço anterior (R$)
+              <label className="space-y-2 text-sm font-medium">Preço anterior / de (R$)
                 <Input type="number" min={draft.price || "0"} step="0.01" value={draft.compareAtPrice} onChange={(event) => setDraft({ ...draft, compareAtPrice: event.target.value })} />
+                <span className="block text-xs font-normal text-muted-foreground">Preencha um valor acima do preço atual para exibir o produto como promoção no carrossel.</span>
               </label>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
