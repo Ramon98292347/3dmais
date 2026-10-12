@@ -48,7 +48,7 @@ async function fetchProducts(): Promise<Product[]> {
     database.from("categories").select("id, name").eq("is_active", true),
     database
       .from("products")
-      .select("*")
+      .select("id, category_id, slug, name, short_description, description, price, compare_at_price, is_active, is_featured, badge, material, dimensions, production_time, features, notes, keywords, created_at")
       .eq("is_active", true)
       .order("created_at", { ascending: false }),
     database.from("product_images").select("*").order("sort_order"),

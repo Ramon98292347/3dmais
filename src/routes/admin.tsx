@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
-import { ArrowLeft, Box, ClipboardList, ImagePlus, LogOut, Plus, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, Box, Boxes, ClipboardList, ImagePlus, LogOut, Plus, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +34,9 @@ type ProductRow = {
   price: number | string;
   compare_at_price: number | string | null;
   is_active: boolean;
+  track_stock: boolean;
+  stock_quantity: number;
+  low_stock_threshold: number;
   is_featured: boolean;
   badge: string | null;
   material: string | null;
@@ -48,7 +51,6 @@ type OrderRow = {
   order_id: string;
   created_at: string;
   status: "received" | "processing" | "ready" | "completed" | "cancelled";
-  payment_method: "bank_deposit" | "contact";
   customer: {
     name: string;
     whatsapp: string;
@@ -69,6 +71,22 @@ type OrderRow = {
   }[];
   notes: string;
   subtotal: number | string;
+};
+type InventoryMovementRow = {
+  id: string;
+  product_id: string;
+  product_name: string;
+  order_id: string | null;
+  quantity_change: number;
+  reason: "manual_adjustment" | "order_started" | "order_cancelled";
+  created_at: string;
+};
+type InventorySummaryRow = {
+  product_id: string;
+  product_name: string;
+  stock_quantity: number;
+  low_stock_threshold: number;
+  net_units_out: number;
 };
 type OptionDraft = {
   key: string;
@@ -94,6 +112,9 @@ type ProductDraft = {
   keywords: string;
   notes: string;
   active: boolean;
+  trackStock: boolean;
+  stockQuantity: string;
+  lowStockThreshold: string;
   featured: boolean;
 };
 
@@ -114,6 +135,9 @@ const emptyProduct: ProductDraft = {
   keywords: "",
   notes: "",
   active: true,
+  trackStock: false,
+  stockQuantity: "0",
+  lowStockThreshold: "3",
   featured: false,
 };
 
@@ -158,8 +182,11 @@ function AdminPage() {
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [inventoryMovements, setInventoryMovements] = useState<InventoryMovementRow[]>([]);
+  const [inventorySummary, setInventorySummary] = useState<InventorySummaryRow[]>([]);
   const [ordersError, setOrdersError] = useState("");
-  const [activeSection, setActiveSection] = useState<"products" | "orders">("products");
+  const [inventoryError, setInventoryError] = useState("");
+  const [activeSection, setActiveSection] = useState<"products" | "orders" | "inventory">("products");
   const [draft, setDraft] = useState<ProductDraft>(emptyProduct);
   const [optionDrafts, setOptionDrafts] = useState<OptionDraft[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
@@ -223,10 +250,12 @@ function AdminPage() {
 
   async function loadDashboard() {
     setPageError("");
-    const [categoryResult, productResult, orderResult] = await Promise.all([
+    const [categoryResult, productResult, orderResult, inventoryResult, inventorySummaryResult] = await Promise.all([
       database.from("categories").select("*").order("sort_order").order("name"),
-      database.from("products").select("*").order("created_at", { ascending: false }),
+      database.rpc("admin_list_products"),
       database.from("catalog_orders").select("*").order("created_at", { ascending: false }).limit(100),
+      database.from("catalog_inventory_movements").select("*").order("created_at", { ascending: false }).limit(100),
+      database.rpc("catalog_inventory_summary"),
     ]);
     if (categoryResult.error || productResult.error) {
       setPageError(categoryResult.error?.message || productResult.error?.message || "Falha ao carregar o painel.");
@@ -240,6 +269,15 @@ function AdminPage() {
     } else {
       setOrders(orderResult.data as unknown as OrderRow[]);
       setOrdersError("");
+    }
+    if (inventoryResult.error || inventorySummaryResult.error) {
+      setInventoryMovements([]);
+      setInventorySummary([]);
+      setInventoryError("Aplique supabase/inventory.sql para ativar o controle e o histórico do estoque.");
+    } else {
+      setInventoryMovements(inventoryResult.data as InventoryMovementRow[]);
+      setInventorySummary(inventorySummaryResult.data as InventorySummaryRow[]);
+      setInventoryError("");
     }
     setDraft((current) => ({
       ...current,
@@ -313,12 +351,18 @@ function AdminPage() {
 
   async function updateOrderStatus(orderId: string, status: OrderRow["status"]) {
     setPageError("");
-    const { error } = await database.from("catalog_orders").update({ status }).eq("order_id", orderId);
+    const { error } = await database.rpc("set_catalog_order_status", {
+      p_order_id: orderId,
+      p_status: status,
+    });
     if (error) {
-      setPageError("Não foi possível atualizar o pedido. Aplique a versão atual de supabase/orders.sql.");
+      setPageError(error.message.includes("Not enough stock")
+        ? error.message
+        : "Não foi possível atualizar o pedido. Confira supabase/orders.sql e supabase/inventory.sql.");
       return;
     }
     setOrders((current) => current.map((order) => order.order_id === orderId ? { ...order, status } : order));
+    await loadDashboard();
   }
 
   async function addCategory(event: FormEvent<HTMLFormElement>) {
@@ -364,6 +408,9 @@ function AdminPage() {
       keywords: (product.keywords ?? []).join(", "),
       notes: product.notes ?? "",
       active: product.is_active,
+      trackStock: product.track_stock,
+      stockQuantity: String(product.stock_quantity),
+      lowStockThreshold: String(product.low_stock_threshold),
       featured: product.is_featured,
     });
     setFiles([]);
@@ -418,6 +465,14 @@ function AdminPage() {
       setBusy(false);
       return;
     }
+    if (
+      !Number.isInteger(Number(draft.stockQuantity)) || Number(draft.stockQuantity) < 0 ||
+      !Number.isInteger(Number(draft.lowStockThreshold)) || Number(draft.lowStockThreshold) < 0
+    ) {
+      setPageError("Estoque e limite mínimo devem ser números inteiros iguais ou maiores que zero.");
+      setBusy(false);
+      return;
+    }
     const currentImageCount = editingId
       ? await database
           .from("product_images")
@@ -444,6 +499,8 @@ function AdminPage() {
       price: Number(draft.price),
       compare_at_price: draft.promotionActive && draft.compareAtPrice ? Number(draft.compareAtPrice) : null,
       is_active: draft.active,
+      track_stock: draft.trackStock,
+      low_stock_threshold: Math.max(0, Number(draft.lowStockThreshold) || 0),
       is_featured: draft.featured,
       badge: draft.badge.trim() || null,
       material: draft.material.trim() || null,
@@ -514,6 +571,11 @@ function AdminPage() {
         const { error } = await database.from("product_options").insert(options);
         if (error) throw error;
       }
+      const { error: stockError } = await database.rpc("adjust_catalog_stock", {
+        p_product_id: productId,
+        p_new_quantity: Math.max(0, Math.floor(Number(draft.stockQuantity) || 0)),
+      });
+      if (stockError) throw stockError;
       setNotice(editingId ? "Produto atualizado." : "Produto cadastrado.");
       resetProductForm();
       await loadDashboard();
@@ -636,6 +698,9 @@ function AdminPage() {
         <Button variant={activeSection === "orders" ? "default" : "outline"} onClick={() => setActiveSection("orders")}>
           <ClipboardList size={16} /> Histórico de pedidos ({orders.length})
         </Button>
+        <Button variant={activeSection === "inventory" ? "default" : "outline"} onClick={() => setActiveSection("inventory")}>
+          <Boxes size={16} /> Estoque
+        </Button>
       </nav>
 
       {activeSection === "orders" ? (
@@ -661,18 +726,20 @@ function AdminPage() {
                 <div className="flex flex-wrap items-center gap-3">
                   <strong className="text-lg text-primary">{money(Number(order.subtotal))}</strong>
                   <select aria-label={`Status do pedido ${order.order_id.slice(0, 8)}`} className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={order.status ?? "received"} onChange={(event) => void updateOrderStatus(order.order_id, event.target.value as OrderRow["status"])}>
-                    <option value="received">Recebido</option>
-                    <option value="processing">Em produção</option>
-                    <option value="ready">Pronto</option>
-                    <option value="completed">Concluído</option>
-                    <option value="cancelled">Cancelado</option>
+                    {(order.status === "received"
+                      ? [["received", "Recebido"], ["processing", "Em produção"], ["cancelled", "Cancelado"]]
+                      : order.status === "processing"
+                        ? [["processing", "Em produção"], ["ready", "Pronto"], ["cancelled", "Cancelado"]]
+                        : order.status === "ready"
+                          ? [["ready", "Pronto"], ["completed", "Concluído"], ["cancelled", "Cancelado"]]
+                          : [[order.status, order.status === "completed" ? "Concluído" : "Cancelado"]]
+                    ).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
                   </select>
                 </div>
               </header>
               <div className="grid gap-5 py-4 md:grid-cols-2">
                 <div className="space-y-1 text-sm">
                   <h4 className="font-semibold">Contato e entrega</h4>
-                  <p>Pagamento: {order.payment_method === "bank_deposit" ? "Depósito/transferência bancária (confirmar com cliente)" : "Combinar com a loja"}</p>
                   <p>WhatsApp: {order.customer.whatsapp}</p>
                   <p>{order.customer.city} — {order.customer.state}{order.customer.cep ? ` · CEP ${order.customer.cep}` : ""}</p>
                   {(order.customer.address || order.customer.number || order.customer.complement) && <p>{[order.customer.address, order.customer.number, order.customer.complement].filter(Boolean).join(", ")}</p>}
@@ -695,6 +762,47 @@ function AdminPage() {
               </div>
             </article>
           ))}
+        </section>
+      ) : activeSection === "inventory" ? (
+        <section className="space-y-5">
+          <header className="rounded-2xl border bg-card p-5 shadow-sm md:p-7">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">Controle de estoque</h2>
+                <p className="mt-1 text-sm text-muted-foreground">A baixa acontece quando o pedido passa para “Em produção”. Se cancelado antes de concluir, as unidades voltam ao estoque.</p>
+              </div>
+              <Button variant="outline" onClick={() => void loadDashboard()}>Atualizar</Button>
+            </div>
+          </header>
+          {inventoryError && <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-800">{inventoryError}</p>}
+          <section className="rounded-2xl border bg-card p-5 shadow-sm">
+            <h3 className="font-semibold">Saídas líquidas por produto</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Unidades baixadas ao iniciar a produção, descontando pedidos cancelados.</p>
+            {inventorySummary.length ? <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[420px] text-left text-sm"><thead><tr className="border-b text-muted-foreground"><th className="pb-2 font-medium">Produto</th><th className="pb-2 font-medium">Disponível</th><th className="pb-2 font-medium">Mínimo</th><th className="pb-2 text-right font-medium">Saída líquida</th></tr></thead><tbody>{inventorySummary.map((item) => <tr key={item.product_id} className="border-b last:border-0"><td className="py-3 pr-3 font-medium">{item.product_name}</td><td className="py-3">{item.stock_quantity}</td><td className="py-3">{item.low_stock_threshold}</td><td className="py-3 text-right">{item.net_units_out}</td></tr>)}</tbody></table></div> : <p className="mt-4 text-sm text-muted-foreground">Ative o controle de estoque nos produtos para ver as saídas.</p>}
+          </section>
+          <div className="grid gap-4 md:grid-cols-2">
+            <section className="rounded-2xl border bg-card p-5 shadow-sm">
+              <h3 className="font-semibold">Produtos para repor ({products.filter((product) => product.track_stock && product.stock_quantity <= product.low_stock_threshold).length})</h3>
+              <ul className="mt-4 space-y-3">
+                {products.filter((product) => product.track_stock && product.stock_quantity <= product.low_stock_threshold).map((product) => (
+                  <li key={product.id} className="flex items-center justify-between gap-3 border-b pb-3 last:border-0">
+                    <div><p className="font-medium">{product.name}</p><p className="text-sm text-muted-foreground">{product.stock_quantity} em estoque · mínimo {product.low_stock_threshold}</p></div>
+                    <Button size="sm" variant="outline" onClick={() => { setActiveSection("products"); editProduct(product); }}>Ajustar</Button>
+                  </li>
+                ))}
+                {!products.some((product) => product.track_stock && product.stock_quantity <= product.low_stock_threshold) && <li className="text-sm text-muted-foreground">Nenhum produto abaixo do limite.</li>}
+              </ul>
+            </section>
+            <section className="rounded-2xl border bg-card p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3"><h3 className="font-semibold">Movimentações recentes</h3><span className="text-xs text-muted-foreground">Últimas 100</span></div>
+              {inventoryMovements.length ? <ul className="mt-4 space-y-3">{inventoryMovements.map((movement) => (
+                <li key={movement.id} className="flex items-start justify-between gap-3 border-b pb-3 last:border-0">
+                  <div><p className="font-medium">{movement.product_name}</p><p className="text-xs text-muted-foreground">{movement.reason === "manual_adjustment" ? "Ajuste manual" : movement.reason === "order_started" ? `Pedido ${movement.order_id?.slice(0, 8).toUpperCase()} · entrou em produção` : `Pedido ${movement.order_id?.slice(0, 8).toUpperCase()} · estoque restaurado`}</p><p className="text-xs text-muted-foreground">{new Date(movement.created_at).toLocaleString("pt-BR")}</p></div>
+                  <strong className={movement.quantity_change < 0 ? "text-destructive" : "text-primary"}>{movement.quantity_change > 0 ? "+" : ""}{movement.quantity_change}</strong>
+                </li>
+              ))}</ul> : <p className="mt-4 text-sm text-muted-foreground">Ainda não há movimentações.</p>}
+            </section>
+          </div>
         </section>
       ) : (
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
@@ -764,6 +872,22 @@ function AdminPage() {
               <label className="space-y-2 text-sm font-medium">Prazo de produção
                 <Input value={draft.productionTime} onChange={(event) => setDraft({ ...draft, productionTime: event.target.value })} />
               </label>
+            </div>
+            <div className="space-y-3 rounded-xl border p-4">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input type="checkbox" checked={draft.trackStock} onChange={(event) => setDraft({ ...draft, trackStock: event.target.checked })} />
+                Controlar estoque deste produto
+              </label>
+              {draft.trackStock ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="space-y-2 text-sm font-medium">Quantidade atual
+                    <Input type="number" min="0" step="1" required value={draft.stockQuantity} onChange={(event) => setDraft({ ...draft, stockQuantity: event.target.value })} />
+                  </label>
+                  <label className="space-y-2 text-sm font-medium">Avisar quando chegar a
+                    <Input type="number" min="0" step="1" required value={draft.lowStockThreshold} onChange={(event) => setDraft({ ...draft, lowStockThreshold: event.target.value })} />
+                  </label>
+                </div>
+              ) : <p className="text-xs text-muted-foreground">Ative para registrar entradas, saídas e alerta de poucas unidades.</p>}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="space-y-2 text-sm font-medium">Características <span className="font-normal text-muted-foreground">(uma por linha)</span>

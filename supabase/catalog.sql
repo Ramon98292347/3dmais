@@ -27,6 +27,9 @@ create table if not exists public.products (
   price numeric(12, 2) not null check (price >= 0),
   compare_at_price numeric(12, 2),
   is_active boolean not null default false,
+  track_stock boolean not null default false,
+  stock_quantity integer not null default 0 check (stock_quantity >= 0),
+  low_stock_threshold integer not null default 3 check (low_stock_threshold >= 0),
   is_featured boolean not null default false,
   badge text,
   material text,
@@ -164,7 +167,11 @@ revoke all on table public.product_images from public, anon, authenticated;
 revoke all on table public.product_options from public, anon, authenticated;
 
 grant select on table public.categories to anon, authenticated;
-grant select on table public.products to anon, authenticated;
+grant select (
+  id, category_id, slug, name, short_description, description, price,
+  compare_at_price, is_active, is_featured, badge, material, dimensions,
+  production_time, features, notes, keywords, created_at
+) on table public.products to anon, authenticated;
 grant select on table public.product_images to anon, authenticated;
 grant select on table public.product_options to anon, authenticated;
 grant all on table public.categories to service_role;

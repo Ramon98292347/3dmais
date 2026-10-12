@@ -77,6 +77,25 @@ $$;
 revoke all on function public.claim_first_catalog_admin() from public, anon;
 grant execute on function public.claim_first_catalog_admin() to authenticated, service_role;
 
+create or replace function public.admin_list_products()
+returns setof public.products
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_catalog_admin() then
+    raise exception 'Administrator access required';
+  end if;
+  return query
+    select p.* from public.products as p order by p.created_at desc;
+end;
+$$;
+
+revoke all on function public.admin_list_products() from public, anon;
+grant execute on function public.admin_list_products() to authenticated, service_role;
+
 grant insert, update, delete on table public.categories to authenticated;
 grant insert, update, delete on table public.products to authenticated;
 grant insert, update, delete on table public.product_images to authenticated;
