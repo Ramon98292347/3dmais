@@ -11,7 +11,7 @@ export const Route = createFileRoute("/contato")({
   component: ContactPage,
 });
 function ContactPage() {
-  const url = whatsappUrl();
+  const whatsappContacts = companyConfig.whatsappNumbers;
   return (
     <main className="container contact-page">
       <span className="section-eyebrow">VAMOS CRIAR ALGO JUNTOS</span>
@@ -25,16 +25,20 @@ function ContactPage() {
           <MessageCircle />
           <h2>WhatsApp</h2>
           <p>
-            {url
+            {whatsappContacts.length
               ? "Fale diretamente com a nossa equipe."
               : "O número de atendimento será disponibilizado em breve."}
           </p>
-          {url ? (
-            <Button asChild>
-              <a href={url} target="_blank" rel="noreferrer">
-                Falar no WhatsApp <ArrowRight />
-              </a>
-            </Button>
+          {whatsappContacts.length ? (
+            <div className="contact-whatsapp-list">
+              {whatsappContacts.map((contact) => (
+                <Button key={contact.number} asChild>
+                  <a href={whatsappUrl(contact.number)!} target="_blank" rel="noreferrer">
+                    {contact.display} <ArrowRight />
+                  </a>
+                </Button>
+              ))}
+            </div>
           ) : (
             <Button disabled>Contato em breve</Button>
           )}

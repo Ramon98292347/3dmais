@@ -1486,6 +1486,11 @@ img {
   line-height: 1.8;
   margin: 15px 0 25px;
 }
+.contact-whatsapp-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
 .contact-page {
   min-height: 65vh;
 }
